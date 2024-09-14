@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ring Protocol Network - Administrator Dashboard</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            height: 100%;
+            overflow: hidden;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 200px 1fr 300px;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+        }
+        .header {
+            grid-column: 1 / -1;
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .admin-label {
+            font-size: 0.9em;
+            font-weight: bold;
+            background-color: #45a049;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+        .tasks {
+            background-color: #f0f0f0;
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .network-display {
+            padding: 20px;
+            overflow-y: auto;
+        }
+        .dialogue-space {
+            background-color: #f8f8f8;
+            padding: 20px;
+            overflow-y: auto;
+            border-left: 1px solid #ddd;
+        }
+        .tasks button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+        }
+        .tasks button:hover {
+            background-color: #45a049;
+        }
+        #network-graph {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            position: relative;
+        }
+        .node {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            position: absolute;
+            cursor: pointer;
+        }
+        .node.active {
+            background-color: #4CAF50;
+        }
+        .node.inactive {
+            background-color: #f44336;
+        }
+        h2, h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        #dialogue-content {
+            margin-top: 20px;
+        }
+        .message-list {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .message-item {
+            margin-bottom: 10px;
+            padding: 5px;
+            background-color: #f0f0f0;
+            border-radius: 5px;
+        }
+        .message-item button {
+            margin-top: 5px;
+        }
+        input, select, textarea {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <header class="header">
+            <h1>Ring Protocol Network</h1>
+            <div class="admin-label">Admin Dashboard</div>
+            <a href="#" onclick="viewSystemBuffer()">View System Buffer</a>
+        </header>
+        
+        <nav class="tasks">
+            <h2>Administrator Tasks</h2>
+            <button onclick="showDialogue('create-node')">Create Node</button>
+            <button onclick="showDialogue('delete-node')">Delete Node</button>
+            <button onclick="showDialogue('send-message')">Send Message</button>
+            <button onclick="showDialogue('view-node')">View Node Details</button>
+            <button onclick="showDialogue('toggle-status')">Toggle Node Status</button>
+            <button onclick="showDialogue('modify-buffer')">Modify System Buffer Size</button>
+            <button onclick="showDialogue('clear-buffer')">Clear System Buffer</button>
+        </nav>
+        
+        <main class="network-display">
+            <h2>Network Visualization</h2>
+            <div id="network-graph"></div>
+        </main>
+        
+        <aside class="dialogue-space">
+            <h2>Dialogue Space</h2>
+            <div id="dialogue-content">
+                Select a task or click on a node to view details and interact.
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        let nodes = [
+            { id: 'N1', leftNeighbor: 'N3', rightNeighbor: 'N2', status: 'active', inbox: [], store: [], archive: [], messageCounter: 0, inboxSize: 5 },
+            { id: 'N2', leftNeighbor: 'N1', rightNeighbor: 'N3', status: 'active', inbox: [], store: [], archive: [], messageCounter: 0, inboxSize: 5 },
+            { id: 'N3', leftNeighbor: 'N2', rightNeighbor: 'N1', status: 'active', inbox: [], store: [], archive: [], messageCounter: 0, inboxSize: 5 }
+        ];
+
+        let systemBuffer = [];
+        let systemBufferSize = 10;
+
+        function updateNetworkGraph() {
+            const graph = document.getElementById('network-graph');
+            graph.innerHTML = '';
+            const centerX = graph.offsetWidth / 2;
+            const centerY = graph.offsetHeight / 2;
+            const radius = Math.min(centerX, centerY) - 50;
+
+            nodes.forEach((node, index) => {
+                const angle = (index / nodes.length) * 2 * Math.PI - Math.PI / 2;
+                const x = centerX + radius * Math.cos(angle);
+                const y = centerY + radius * Math.sin(angle);
+
+                const nodeElement = document.createElement('div');
+                nodeElement.className = `node ${node.status}`;
+                nodeElement.textContent = node.id;
+                nodeElement.style.left = `${x - 25}px`;
+                nodeElement.style.top = `${y - 25}px`;
+                nodeElement.onclick = () => showNodeDetails(node);
+                graph.appendChild(nodeElement);
+            });
+        }
+
+        function showDialogue(task) {
+            const dialogueContent = document.getElementById('dialogue-content');
+            switch(task) {
+                case 'create-node':
+                    dialogueContent.innerHTML = `
+                        <h3>Create Node</h3>
+                        <input type="text" id="newNodeId" placeholder="New Node ID">
+                        <input type="number" id="inboxSize" placeholder="Inbox Size">
+                        <button onclick="createNode()">Create</button>
+                    `;
+                    break;
+                case 'delete-node':
+                    dialogueContent.innerHTML = `
+                        <h3>Delete Node</h3>
+                        <select id="nodeToDelete">
+                            ${nodes.map(node => `<option value="${node.id}">${node.id}</option>`).join('')}
+                        </select>
+                        <button onclick="deleteNode()">Delete</button>
+                    `;
+                    break;
+                case 'send-message':
+                    dialogueContent.innerHTML = `
+                        <h3>Send Message</h3>
+                        <select id="senderNode">
+                            ${nodes.map(node => `<option value="${node.id}">${node.id}</option>`).join('')}
+                        </select>
+                        <select id="receiverNode">
+                            ${nodes.map(node => `<option value="${node.id}">${node.id}</option>`).join('')}
+                        </select>
+                        <textarea id="messageContent" placeholder="Enter message"></textarea>
+                        <select id="direction">
+                            <option value="left">Left</option>
+                            <option value="right">Right</option>
+                        </select>
+                        <button onclick="sendMessage()">Send</button>
+                    `;
+                    break;
+                case 'view-node':
+                    dialogueContent.innerHTML = `
+                        <h3>View Node Details</h3>
+                        <select id="nodeToView" onchange="viewNodeDetails(nodes.find(n => n.id === this.value))">
+                            ${nodes.map(node => `<option value="${node.id}">${node.id}</option>`).join('')}
+                        </select>
+                        <div id="nodeDetails"></div>
+                    `;
+                    break;
+                case 'toggle-status':
+                    dialogueContent.innerHTML = `
+                        <h3>Toggle Node Status</h3>
+                        <select id="nodeToToggle">
+                            ${nodes.map(node => `<option value="${node.id}">${node.id} (${node.status})</option>`).join('')}
+                        </select>
+                        <button onclick="toggleNodeStatus()">Toggle Status</button>
+                    `;
+                    break;
+                case 'modify-buffer':
+                    dialogueContent.innerHTML = `
+                        <h3>Modify System Buffer Size</h3>
+                        <input type="number" id="newBufferSize" placeholder="New Buffer Size">
+                        <button onclick="modifyBufferSize()">Update Buffer Size</button>
+                    `;
+                    break;
+                case 'clear-buffer':
+                    dialogueContent.innerHTML = `
+                        <h3>Clear System Buffer</h3>
+                        <button onclick="clearSystemBuffer()">Clear Buffer</button>
+                    `;
+                    break;
+            }
+        }
+
+        function showNodeDetails(node) {
+            const dialogueContent = document.getElementById('dialogue-content');
+            dialogueContent.innerHTML = `
+                <h3>Node Details: ${node.id}</h3>
+                <p>Left Neighbor: ${node.leftNeighbor}</p>
+                <p>Right Neighbor: ${node.rightNeighbor}</p>
+                <p>Status: ${node.status}</p>
+                <h4>Inbox (${node.inbox.length} messages)</h4>
+                <div class="message-list">
+                    ${node.inbox.map((msg, index) => `
+                        <div class="message-item">
+                            <p>MessageID: ${msg.messageId}</p>
+                            <p>SenderID: ${msg.senderId}</p>
+                            <p>ReceiverID: ${msg.receiverId}</p>
+                            <p>Message: ${msg.message}</p>
+                            <p>TimeStamp-Created: ${msg.timeStampCreated}</p>
+                            <p>TimeStamp-Received: ${msg.timeStampReceived}</p>
+                            <p>Direction: ${msg.direction}</p>
+                            <p>Path: ${msg.path.join(' -> ')}</p>
+                            <p>Status: ${msg.status}</p>
+                            <button onclick="readMessage('${node.id}', ${index})">Read</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <h4>Store (${node.store.length} messages)</h4>
+                <div class="message-list">
+                    ${node.store.map((msg, index) => `
+                        <div class="message-item">
+                            <p>MessageID: ${msg.messageId}</p>
+                            <p>SenderID: ${msg.senderId}</p>
+                            <p>ReceiverID: ${msg.receiverId}</p>
+                            <p>Message: ${msg.message}</p>
+                            <p>TimeStamp-Created: ${msg.timeStampCreated}</p>
+                            <p>TimeStamp-Received: ${msg.timeStampReceived}</p>
+                            <p>Direction: ${msg.direction}</p>
+                            <p>Path: ${msg.path.join(' -> ')}</p>
+                            <p>Status: ${msg.status}</p>
+                            <button onclick="archiveMessage('${node.id}', ${index})">Archive</button>
+                        </div>
+                    `).join('')}
+                </div>
+                <h4>Archive (${node.archive.length} messages)</h4>
+                <div class="message-list">
+                    ${node.archive.map(msg => `
+                        <div class="message-item">
+                            <p>MessageID: ${msg.messageId}</p>
+                            <p>SenderID: ${msg.senderId}</p>
+                            <p>ReceiverID: ${msg.receiverId}</p>
+                            <p>Message: ${msg.message}</p>
+                            <p>TimeStamp-Created: ${msg.timeStampCreated}</p>
+                            <p>TimeStamp-Received: ${msg.timeStampReceived}</p>
+                            <p>Direction: ${msg.direction}</p>
+                            <p>Path: ${msg.path.join(' -> ')}</p>
+                            <p>Status: ${msg.status}</p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function createNode() {
+            const newNodeId = document.getElementById('newNodeId').value;
+            const inboxSize = parseInt(document.getElementById('inboxSize').value);
+            if (nodes.length < 10 && !nodes.some(node => node.id === newNodeId)) {
+                const lastNode = nodes[nodes.length - 1];
+                const newNode = { 
+                    id: newNodeId, 
+                    leftNeighbor: lastNode.id, 
+                    rightNeighbor: nodes[0].id, 
+                    status: 'active', 
+                    inbox: [], 
+                    store: [], 
+                    archive: [],
+                    messageCounter: 0,
+                    inboxSize: inboxSize
+                };
+                nodes.push(newNode);
+                lastNode.rightNeighbor = newNodeId;
+                nodes[0].leftNeighbor = newNodeId;
+                updateNetworkGraph();
+                alert(`Node ${newNodeId} created with inbox size ${inboxSize}`);
+            } else {
+                alert('Cannot add node. Maximum limit reached or ID already exists.');
+            }
+        }
+
+        function deleteNode() {
+            const nodeToDelete = document.getElementById('nodeToDelete').value;
+            if (nodes.length > 3) {
+                const index = nodes.findIndex(node => node.id === nodeToDelete);
+                if (index !== -1) {
+                    const leftNeighbor = nodes[(index - 1 + nodes.length) % nodes.length];
+                    const rightNeighbor = nodes[(index + 1) % nodes.length];
+                    leftNeighbor.rightNeighbor = rightNeighbor.id;
+                    rightNeighbor.leftNeighbor = leftNeighbor.id;
+                    nodes.splice(index, 1);
+                    updateNetworkGraph();
+                    alert(`Node ${nodeToDelete} deleted`);
+                }
+            } else {
+                alert('Cannot delete node. Minimum 3 nodes required.');
+            }
+        }
+
+        function sendMessage() {
+            const sender = document.getElementById('senderNode').value;
+            const receiver = document.getElementById('receiverNode').value;
+            const content = document.getElementById('messageContent').value;
+            const direction = document.getElementById('direction').value;
+            const senderNode = nodes.find(n => n.id === sender);
+            const receiverNode = nodes.find(n => n.id === receiver);
+
+            if (receiverNode.status === 'inactive') {
+                const errorMessage = `Message to inactive node ${receiver}: ${content}`;
+                addToSystemBuffer(errorMessage);
+                alert(`Error: Cannot send message to inactive node ${receiver}. Message added to system buffer.`);
+                return;
+            }
+
+            senderNode.messageCounter++;
+            const message = {
+                messageId: `${sender}M${senderNode.messageCounter}`,
+                senderId: sender,
+                receiverId: receiver,
+                message: content,
+                timeStampCreated: getCurrentTimestamp(),
+                timeStampReceived: '',
+                direction: direction,
+                path: [sender],
+                status: 'Created'
+            };
+
+            let currentNode = senderNode;
+            while (currentNode.id !== receiver) {
+                if (direction === 'left') {
+                    currentNode = nodes.find(n => n.id === currentNode.leftNeighbor);
+                } else {
+                    currentNode = nodes.find(n => n.id === currentNode.rightNeighbor);
+                }
+
+                if (currentNode.status === 'inactive') {
+                    message.status = 'NotDelivered-NodeInactive';
+                    addToSystemBuffer(message);
+                    alert(`Message delivery failed: Node ${currentNode.id} is inactive. Message added to system buffer.`);
+                    return;
+                }
+
+                message.path.push(currentNode.id);
+                message.status = 'OnRoute';
+            }
+
+            if (receiverNode.inbox.length >= receiverNode.inboxSize) {
+                message.status = 'NotDelivered-InboxFull';
+                addToSystemBuffer(message);
+                alert(`Message delivery failed: Inbox of node ${receiver} is full. Message added to system buffer.`);
+                return;
+            }
+
+            message.status = 'Delivered';
+            message.timeStampReceived = getCurrentTimestamp();
+            receiverNode.inbox.push(message);
+            alert(`Message sent from ${sender} to ${receiver} in ${direction} direction: "${content}"`);
+            showNodeDetails(receiverNode);
+        }
+
+        function readMessage(nodeId, messageIndex) {
+            const node = nodes.find(n => n.id === nodeId);
+            const message = node.inbox.splice(messageIndex, 1)[0];
+            node.store.push(message);
+            showNodeDetails(node);
+        }
+
+        function archiveMessage(nodeId, messageIndex) {
+            const node = nodes.find(n => n.id === nodeId);
+            const message = node.store.splice(messageIndex, 1)[0];
+            node.archive.push(message);
+            showNodeDetails(node);
+        }
+
+        function toggleNodeStatus() {
+            const nodeId = document.getElementById('nodeToToggle').value;
+            const node = nodes.find(n => n.id === nodeId);
+            node.status = node.status === 'active' ? 'inactive' : 'active';
+            updateNetworkGraph();
+            alert(`Node ${nodeId} status toggled to ${node.status}`);
+            showDialogue('toggle-status'); // Refresh the dropdown
+        }
+
+        function modifyBufferSize() {
+            const newSize = parseInt(document.getElementById('newBufferSize').value);
+            if (newSize > 0) {
+                systemBufferSize = newSize;
+                alert(`System buffer size updated to ${newSize}`);
+            } else {
+                alert('Invalid buffer size. Please enter a positive number.');
+            }
+        }
+
+        function clearSystemBuffer() {
+            systemBuffer = [];
+            alert('System buffer cleared.');
+        }
+
+        function viewSystemBuffer() {
+            const dialogueContent = document.getElementById('dialogue-content');
+            dialogueContent.innerHTML = `
+                <h3>System Buffer</h3>
+                <div class="message-list">
+                    ${systemBuffer.map((msg, index) => `
+                        <div class="message-item">
+                            ${typeof msg === 'string' ? 
+                                `<p>${msg}</p>` :
+                                `
+                                <p>MessageID: ${msg.messageId}</p>
+                                <p>SenderID: ${msg.senderId}</p>
+                                <p>ReceiverID: ${msg.receiverId}</p>
+                                <p>Message: ${msg.message}</p>
+                                <p>TimeStamp-Created: ${msg.timeStampCreated}</p>
+                                <p>Direction: ${msg.direction}</p>
+                                <p>Path: ${msg.path.join(' -> ')}</p>
+                                <p>Status: ${msg.status}</p>
+                                `
+                            }
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function addToSystemBuffer(message) {
+            if (systemBuffer.length >= systemBufferSize) {
+                systemBuffer.shift(); // Remove the oldest message if buffer is full
+            }
+            systemBuffer.push(message);
+        }
+
+        function getCurrentTimestamp() {
+            const now = new Date();
+            const mon = (now.getMonth() + 1).toString().padStart(2, '0');
+            const day = now.getDate().toString().padStart(2, '0');
+            const year = now.getFullYear();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const seconds = now.getSeconds().toString().padStart(2, '0');
+            return `${mon}:${day}:${year}:${hours}:${minutes}:${seconds}`;
+        }
+
+        // Initialize the network graph
+        updateNetworkGraph();
+    </script>
+</body>
+</html>
